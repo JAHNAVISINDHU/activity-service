@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: \
+      RABBITMQ_DEFAULT_PASS: \
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app-network
+
+  mongodb:
+    image: mongo:7.0
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: \
+      MONGO_INITDB_ROOT_PASSWORD: \
+      MONGO_INITDB_DATABASE: \
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - app-network
+
+  api-service:
+    build:
+      context: ./api-service
+      dockerfile: Dockerfile
+    container_name: api-service
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: \
+      NODE_ENV: \
+      RABBITMQ_URL: amqp://\:\@rabbitmq:5672
+      RABBITMQ_QUEUE: \
+      RATE_LIMIT_WINDOW_MS: \
+      RATE_LIMIT_MAX: \
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+  consumer-service:
+    build:
+      context: ./consumer-service
+      dockerfile: Dockerfile
+    container_name: consumer-service
+    environment:
+      NODE_ENV: \
+      RABBITMQ_URL: amqp://\:\@rabbitmq:5672
+      RABBITMQ_QUEUE: \
+      MONGO_URL: mongodb://\:\@mongodb:27017/\?authSource=admin
+      MONGO_DB: \
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    networks:
+      - app-network
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+
+networks:
+  app-network:
+    driver: bridge

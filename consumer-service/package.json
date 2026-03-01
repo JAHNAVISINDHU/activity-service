@@ -1,0 +1,27 @@
+{
+  "name": "consumer-service",
+  "version": "1.0.0",
+  "description": "Event-Driven User Activity Consumer Service",
+  "main": "src/consumer.js",
+  "scripts": {
+    "start": "node src/consumer.js",
+    "dev": "nodemon src/consumer.js",
+    "test": "jest --runInBand --forceExit",
+    "test:coverage": "jest --coverage --runInBand --forceExit"
+  },
+  "dependencies": {
+    "amqplib": "^0.10.3",
+    "mongoose": "^8.0.3"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "coverageDirectory": "coverage",
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "!src/consumer.js"
+    ]
+  }
+}
