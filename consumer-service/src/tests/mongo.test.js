@@ -1,26 +1,25 @@
-// All 43 tests passing: jest.resetModules() removed to preserve mock instance
-const mongoose = require('mongoose');
+// var declarations are hoisted and initialized before jest.mock factory is invoked
+var mockSave = jest.fn();
+var MockActivity = jest.fn().mockImplementation(() => ({ save: mockSave }));
 
-// Mock mongoose before requiring the module
 jest.mock('mongoose', () => {
   const actual = jest.requireActual('mongoose');
   return {
     ...actual,
     connect: jest.fn().mockResolvedValue(),
-    model: jest.fn(),
+    // model() is called at mongo.js load time — return MockActivity constructor
+    model: jest.fn(() => MockActivity),
     Schema: actual.Schema,
   };
 });
 
-describe('saveActivity', () => {
-  let saveMock;
-  let ActivityMock;
+// Require ONCE after mock is set — Activity inside mongo.js becomes MockActivity
+const { saveActivity } = require('../db/mongo');
 
+describe('saveActivity', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    saveMock = jest.fn();
-    ActivityMock = jest.fn().mockImplementation(() => ({ save: saveMock }));
-    mongoose.model.mockReturnValue(ActivityMock);
+    MockActivity.mockClear();
+    mockSave.mockReset();
   });
 
   const validActivityData = {
@@ -31,36 +30,26 @@ describe('saveActivity', () => {
   };
 
   test('should call save on a new Activity document', async () => {
-    saveMock.mockResolvedValueOnce({ _id: 'new-mongo-id' });
-    let saveActivity;
-    jest.isolateModules(() => {
-      ({ saveActivity } = require('../db/mongo'));
-    });
+    mockSave.mockResolvedValueOnce({ _id: 'new-mongo-id' });
 
     await saveActivity(validActivityData);
-    expect(saveMock).toHaveBeenCalledTimes(1);
+
+    expect(MockActivity).toHaveBeenCalledTimes(1);
+    expect(mockSave).toHaveBeenCalledTimes(1);
   });
 
   test('should resolve with the saved document', async () => {
     const savedDoc = { _id: 'doc-id-42', userId: 'user-save-test' };
-    saveMock.mockResolvedValueOnce(savedDoc);
-    let saveActivity;
-    jest.isolateModules(() => {
-      ({ saveActivity } = require('../db/mongo'));
-    });
+    mockSave.mockResolvedValueOnce(savedDoc);
 
     const result = await saveActivity(validActivityData);
+
     expect(result).toEqual(savedDoc);
   });
 
   test('should propagate DB save errors', async () => {
-    saveMock.mockRejectedValueOnce(new Error('Write conflict'));
-    let saveActivity;
-    jest.isolateModules(() => {
-      ({ saveActivity } = require('../db/mongo'));
-    });
+    mockSave.mockRejectedValueOnce(new Error('Write conflict'));
 
     await expect(saveActivity(validActivityData)).rejects.toThrow('Write conflict');
   });
 });
-
